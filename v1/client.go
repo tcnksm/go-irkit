@@ -21,6 +21,29 @@ type InternetClient struct {
 	client *http.Client
 }
 
+type LocalClient struct {
+}
+
+// Message represents IRKit signal
+type Message struct {
+	// Format is format of signal. "raw" only.
+	Format string `json:"format"`
+
+	// Freq is IRKit sub-carrier frequency. 38 or 40 only. [kHz]
+	Freq int `json:"freq"`
+
+	// Data is IRkit signal consists of ON/OFF of sub carrier frequency.
+	// IRKit measures On to Off, Off to On interval using a 2MHz counter.
+	// data value is an array of those intervals
+	Data []int `json:"data"`
+}
+
+type RequestOption struct {
+	// Body is key-value that will be added request body
+	// as 'key=value' with '&'
+	Body map[string]string
+}
+
 func DefaultInternetClient() *InternetClient {
 	client, err := newInternetClient(defaultEndpoint)
 	if err != nil {
@@ -57,12 +80,6 @@ func (c *InternetClient) init() error {
 	return nil
 }
 
-type RequestOption struct {
-	// Body is key-value that will be added request body
-	// as 'key=value' with '&'
-	Body map[string]string
-}
-
 func (c *InternetClient) newRequest(method, spath string, opt *RequestOption) (*http.Request, error) {
 	if len(method) == 0 {
 		return nil, fmt.Errorf("missing method")
@@ -93,8 +110,7 @@ func (c *InternetClient) newRequest(method, spath string, opt *RequestOption) (*
 	return req, nil
 }
 
-// GetKeys gets deviceid and clientkey
-// POST /1/keys
+// GetKeys gets deviceid and clientkey.
 func (c *InternetClient) GetKeys(ctx context.Context, token string) (deviceid, clientkey string, err error) {
 	if ctx == nil {
 		return "", "", fmt.Errorf("nil context")
@@ -135,6 +151,55 @@ func (c *InternetClient) GetKeys(ctx context.Context, token string) (deviceid, c
 	}
 
 	return out.Deviceid, out.Clientkey, nil
+}
+
+// SendMessages sends IR signal through IRKit device identified by deviceid.
+func (c *InternetClient) SendMessages(ctx context.Context, clientkey, deviceid string, msg *Message) error {
+	if ctx == nil {
+		return fmt.Errorf("nil context")
+	}
+
+	if len(clientkey) == 0 {
+		return fmt.Errorf("missing clientkey")
+	}
+
+	if len(deviceid) == 0 {
+		return fmt.Errorf("missing deviceid")
+	}
+
+	if err := msg.validate(); err != nil {
+		return fmt.Errorf("invalid message: %s", err)
+	}
+
+	buf, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	opt := &RequestOption{
+		Body: map[string]string{
+			"clientkey": clientkey,
+			"deviceid":  deviceid,
+			"message":   string(buf),
+		},
+	}
+
+	req, err := c.newRequest("POST", "/1/messages", opt)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("invalid status code: %s", res.Status)
+	}
+
+	return nil
 }
 
 // GetDevices gets devicekey and deviceid
@@ -181,5 +246,18 @@ func (c *InternetClient) GetDevices(ctx context.Context, clientkey string) (devi
 	return out.Devicekey, out.Deviceid, nil
 }
 
-type LocalClient struct {
+func (m *Message) validate() error {
+	if m.Format != "raw" {
+		return fmt.Errorf("format must be raw")
+	}
+
+	if m.Freq != 38 && m.Freq != 40 {
+		return fmt.Errorf("freq must 38 or 40")
+	}
+
+	if len(m.Data) == 0 {
+		return fmt.Errorf("empty data")
+	}
+
+	return nil
 }
