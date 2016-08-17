@@ -21,21 +21,7 @@ type InternetClient struct {
 	client *http.Client
 }
 
-type LocalClient struct {
-}
-
-// Message represents IRKit signal
-type Message struct {
-	// Format is format of signal. "raw" only.
-	Format string `json:"format"`
-
-	// Freq is IRKit sub-carrier frequency. 38 or 40 only. [kHz]
-	Freq int `json:"freq"`
-
-	// Data is IRkit signal consists of ON/OFF of sub carrier frequency.
-	// IRKit measures On to Off, Off to On interval using a 2MHz counter.
-	// data value is an array of those intervals
-	Data []int `json:"data"`
+type localClient struct {
 }
 
 type RequestOption struct {
@@ -64,20 +50,10 @@ func newInternetClient(rawURL string) (*InternetClient, error) {
 		return nil, fmt.Errorf("faile to parse URL: %s", err)
 	}
 
-	client := &InternetClient{
-		URL: parsedURL,
-	}
-
-	if err := client.init(); err != nil {
-		return nil, err
-	}
-
-	return client, nil
-}
-
-func (c *InternetClient) init() error {
-	c.client = http.DefaultClient
-	return nil
+	return &InternetClient{
+		URL:    parsedURL,
+		client: http.DefaultClient,
+	}, nil
 }
 
 func (c *InternetClient) newRequest(method, spath string, opt *RequestOption) (*http.Request, error) {
@@ -244,20 +220,4 @@ func (c *InternetClient) GetDevices(ctx context.Context, clientkey string) (devi
 	}
 
 	return out.Devicekey, out.Deviceid, nil
-}
-
-func (m *Message) validate() error {
-	if m.Format != "raw" {
-		return fmt.Errorf("format must be raw")
-	}
-
-	if m.Freq != 38 && m.Freq != 40 {
-		return fmt.Errorf("freq must 38 or 40")
-	}
-
-	if len(m.Data) == 0 {
-		return fmt.Errorf("empty data")
-	}
-
-	return nil
 }
