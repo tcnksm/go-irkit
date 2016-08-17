@@ -10,11 +10,11 @@ import (
 
 func main() {
 	c := irkit.DefaultInternetClient()
-	id, key, err := c.GetKeys(context.Background(), os.Getenv("TOKEN"))
+	deviceid, clientkey, err := c.GetKeys(context.Background(), os.Getenv("CLIENT_TOKEN"))
 	if err != nil {
 		log.Fatalf("[ERROR] %s", err)
 	}
 
-	log.Printf("[INFO] id: %s", id)
-	log.Printf("[INFO] key: %s", key)
+	log.Printf("[INFO] deviceid: %s", deviceid)
+	log.Printf("[INFO] clientkey: %s", clientkey)
 }
