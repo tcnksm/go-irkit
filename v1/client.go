@@ -21,6 +21,12 @@ const (
 	defaultEndpoint = "https://api.getirkit.com"
 )
 
+const (
+	pathKeys     = "/1/keys"
+	pathMessages = "/1/messages"
+	pathDevices  = "/1/devices"
+)
+
 // InternetClient is client for IRKit Internet HTTP API.
 // https://api.getirkit.com
 type InternetClient struct {
@@ -152,7 +158,8 @@ func (c *InternetClient) GetKeys(ctx context.Context,
 			"clienttoken": token,
 		},
 	}
-	req, err := c.newRequest(ctx, "POST", "/1/keys", opt)
+
+	req, err := c.newRequest(ctx, "POST", pathKeys, opt)
 	if err != nil {
 		return "", "", err
 	}
@@ -208,7 +215,7 @@ func (c *InternetClient) SendMessages(ctx context.Context,
 		},
 	}
 
-	req, err := c.newRequest(ctx, "POST", "/1/messages", opt)
+	req, err := c.newRequest(ctx, "POST", pathMessages, opt)
 	if err != nil {
 		return err
 	}
@@ -256,7 +263,7 @@ func (c *InternetClient) GetMessages(ctx context.Context,
 		},
 	}
 
-	req, err := c.newRequest(ctx, "GET", "/1/messages", opt)
+	req, err := c.newRequest(ctx, "GET", pathMessages, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +304,7 @@ func (c *InternetClient) GetDevices(ctx context.Context,
 		},
 	}
 
-	req, err := c.newRequest(ctx, "POST", "/1/devices", opt)
+	req, err := c.newRequest(ctx, "POST", pathDevices, opt)
 	if err != nil {
 		return "", "", err
 	}
