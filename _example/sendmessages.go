@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
-
-	"encoding/json"
 
 	"github.com/tcnksm/go-irkit/v1"
 )

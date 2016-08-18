@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -24,10 +25,14 @@ type InternetClient struct {
 type localClient struct {
 }
 
-type RequestOption struct {
-	// Body is key-value that will be added request body
+type requestOption struct {
+	// params is key-value that will be added request
+	// URL query
+	params map[string]string
+
+	// body is key-value that will be added request body
 	// as 'key=value' with '&'
-	Body map[string]string
+	body map[string]string
 }
 
 func DefaultInternetClient() *InternetClient {
@@ -40,6 +45,8 @@ func DefaultInternetClient() *InternetClient {
 	return client
 }
 
+// newInternetClient creates InternetClient with the given url.
+// If any, return error.
 func newInternetClient(rawURL string) (*InternetClient, error) {
 	if len(rawURL) == 0 {
 		return nil, fmt.Errorf("missing url")
@@ -56,7 +63,13 @@ func newInternetClient(rawURL string) (*InternetClient, error) {
 	}, nil
 }
 
-func (c *InternetClient) newRequest(method, spath string, opt *RequestOption) (*http.Request, error) {
+// newRequest creates request for IntenetClient.
+// It returns request with the given context.
+func (c *InternetClient) newRequest(ctx context.Context, method,
+	spath string, opt *requestOption) (*http.Request, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("nil context")
+	}
 	if len(method) == 0 {
 		return nil, fmt.Errorf("missing method")
 	}
@@ -68,26 +81,44 @@ func (c *InternetClient) newRequest(method, spath string, opt *RequestOption) (*
 	u := *c.URL
 	u.Path = path.Join(c.URL.Path, spath)
 
-	kv := make([]string, 0, len(opt.Body))
-	for k, v := range opt.Body {
-		kv = append(kv, fmt.Sprintf("%s=%s", k, v))
+	// Create request body reader
+	var r io.Reader
+	if len(opt.body) != 0 {
+		kv := make([]string, 0, len(opt.body))
+		for k, v := range opt.body {
+			kv = append(kv, fmt.Sprintf("%s=%s", k, v))
+		}
+		r = strings.NewReader(strings.Join(kv, "&"))
 	}
-	r := strings.NewReader(strings.Join(kv, "&"))
 
 	req, err := http.NewRequest(method, u.String(), r)
 	if err != nil {
 		return nil, err
 	}
 
+	// Add query params
+	if len(opt.params) != 0 {
+		values := req.URL.Query()
+		for k, v := range opt.params {
+			values.Add(k, v)
+		}
+
+		req.URL.RawQuery = values.Encode()
+	}
+
 	// Set common headers
 	req.Header.Set("User-Agent", "go-irkit")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Set context
+	req = req.WithContext(ctx)
 
 	return req, nil
 }
 
 // GetKeys gets deviceid and clientkey.
-func (c *InternetClient) GetKeys(ctx context.Context, token string) (deviceid, clientkey string, err error) {
+func (c *InternetClient) GetKeys(ctx context.Context,
+	token string) (deviceid, clientkey string, err error) {
 	if ctx == nil {
 		return "", "", fmt.Errorf("nil context")
 	}
@@ -96,12 +127,12 @@ func (c *InternetClient) GetKeys(ctx context.Context, token string) (deviceid, c
 		return "", "", fmt.Errorf("missing token")
 	}
 
-	opt := &RequestOption{
-		Body: map[string]string{
+	opt := &requestOption{
+		body: map[string]string{
 			"clienttoken": token,
 		},
 	}
-	req, err := c.newRequest("POST", "/1/keys", opt)
+	req, err := c.newRequest(ctx, "POST", "/1/keys", opt)
 	if err != nil {
 		return "", "", err
 	}
@@ -130,7 +161,8 @@ func (c *InternetClient) GetKeys(ctx context.Context, token string) (deviceid, c
 }
 
 // SendMessages sends IR signal through IRKit device identified by deviceid.
-func (c *InternetClient) SendMessages(ctx context.Context, clientkey, deviceid string, msg *Message) error {
+func (c *InternetClient) SendMessages(ctx context.Context,
+	clientkey, deviceid string, msg *Message) error {
 	if ctx == nil {
 		return fmt.Errorf("nil context")
 	}
@@ -152,15 +184,15 @@ func (c *InternetClient) SendMessages(ctx context.Context, clientkey, deviceid s
 		return err
 	}
 
-	opt := &RequestOption{
-		Body: map[string]string{
+	opt := &requestOption{
+		body: map[string]string{
 			"clientkey": clientkey,
 			"deviceid":  deviceid,
 			"message":   string(buf),
 		},
 	}
 
-	req, err := c.newRequest("POST", "/1/messages", opt)
+	req, err := c.newRequest(ctx, "POST", "/1/messages", opt)
 	if err != nil {
 		return err
 	}
@@ -178,8 +210,63 @@ func (c *InternetClient) SendMessages(ctx context.Context, clientkey, deviceid s
 	return nil
 }
 
+// GetMessages gets latest received IR signal. This request is a
+// long pooling request.
+//
+// If you provide clear=true, it it clears IR signal buffer on server
+// on internet. When IRKit device receives an IR signal, device sends
+// it over to our server on Internet, and server passes it over as response.
+//
+// Server will respond with an empty response after timeout.
+func (c *InternetClient) GetMessages(ctx context.Context,
+	clientkey string, clear bool) (*SignalInfo, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("nil context")
+	}
+
+	if len(clientkey) == 0 {
+		return nil, fmt.Errorf("missing clientkey")
+	}
+
+	clearStr := "0"
+	if clear {
+		clearStr = "1"
+	}
+
+	opt := &requestOption{
+		params: map[string]string{
+			"clear":     clearStr,
+			"clientkey": clientkey,
+		},
+	}
+
+	req, err := c.newRequest(ctx, "GET", "/1/messages", opt)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("invalid status code: %s", res.Status)
+	}
+
+	var out SignalInfo
+	decoder := json.NewDecoder(res.Body)
+	if err := decoder.Decode(&out); err != nil {
+		return nil, err
+	}
+
+	return &out, nil
+}
+
 // GetDevices gets devicekey and deviceid
-func (c *InternetClient) GetDevices(ctx context.Context, clientkey string) (devicekey, deviceid string, err error) {
+func (c *InternetClient) GetDevices(ctx context.Context,
+	clientkey string) (devicekey, deviceid string, err error) {
 	if ctx == nil {
 		return "", "", fmt.Errorf("nil context")
 	}
@@ -188,13 +275,13 @@ func (c *InternetClient) GetDevices(ctx context.Context, clientkey string) (devi
 		return "", "", fmt.Errorf("missing clientkey")
 	}
 
-	opt := &RequestOption{
-		Body: map[string]string{
+	opt := &requestOption{
+		body: map[string]string{
 			"clientkey": clientkey,
 		},
 	}
 
-	req, err := c.newRequest("POST", "/1/devices", opt)
+	req, err := c.newRequest(ctx, "POST", "/1/devices", opt)
 	if err != nil {
 		return "", "", err
 	}

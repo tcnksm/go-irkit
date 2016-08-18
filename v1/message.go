@@ -2,7 +2,19 @@ package irkit
 
 import "fmt"
 
-// Message represents IRKit signal.
+// SignalInfo represetns IRKit signal infomation.
+type SignalInfo struct {
+	// Hostname is IRKit device hostname.
+	Hostname string `json:"hostname"`
+
+	// Deviceid is IRKit device identifier.
+	Deviceid string `json:"deviceid"`
+
+	// Message is IRKit signal message.
+	Message Message `json:"message"`
+}
+
+// Message represents IRKit signal message.
 type Message struct {
 	// Format is format of signal. "raw" only.
 	Format string `json:"format"`
