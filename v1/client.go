@@ -1,4 +1,4 @@
-// Package irkit is golang client for IRKit.
+// Package irkit is unofficial golang client for IRKit.
 //
 // IRKit is IRKit is a Wi-Fi enabled Open Source Infrared Remote Controller device.
 // See more on offial documentation http://getirkit.com/en/
