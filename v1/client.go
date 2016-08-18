@@ -1,4 +1,9 @@
-// Package irkit
+// Package irkit is golang client for IRKit.
+//
+// IRKit is IRKit is a Wi-Fi enabled Open Source Infrared Remote Controller device.
+// See more on offial documentation http://getirkit.com/en/
+//
+// See example usage on `v1/_example` directory.
 package irkit
 
 import (
@@ -17,14 +22,18 @@ const (
 )
 
 // InternetClient is client for IRKit Internet HTTP API.
+// https://api.getirkit.com
 type InternetClient struct {
 	URL    *url.URL
 	client *http.Client
 }
 
 type localClient struct {
+	// TODO
 }
 
+// requestOption stores option used for create
+// internet client http.Request.
 type requestOption struct {
 	// params is key-value that will be added request
 	// URL query
@@ -35,6 +44,17 @@ type requestOption struct {
 	body map[string]string
 }
 
+type getKeysResponse struct {
+	Clientkey string `json:"clientkey"`
+	Deviceid  string `json:"deviceid"`
+}
+
+type getDevicesResponse struct {
+	Devicekey string `json:"devicekey"`
+	Deviceid  string `json:"deviceid"`
+}
+
+// DefaultInternetClient creates InternetClient with default API endpoint.
 func DefaultInternetClient() *InternetClient {
 	client, err := newInternetClient(defaultEndpoint)
 	if err != nil {
@@ -147,11 +167,7 @@ func (c *InternetClient) GetKeys(ctx context.Context,
 		return "", "", fmt.Errorf("invalid status code: %s", res.Status)
 	}
 
-	out := struct {
-		Clientkey string `json:"clientkey"`
-		Deviceid  string `json:"deviceid"`
-	}{}
-
+	var out getKeysResponse
 	decoder := json.NewDecoder(res.Body)
 	if err := decoder.Decode(&out); err != nil {
 		return "", "", err
@@ -296,11 +312,7 @@ func (c *InternetClient) GetDevices(ctx context.Context,
 		return "", "", fmt.Errorf("invalid status code: %s", res.Status)
 	}
 
-	out := struct {
-		Devicekey string `json:"devicekey"`
-		Deviceid  string `json:"deviceid"`
-	}{}
-
+	var out getDevicesResponse
 	decoder := json.NewDecoder(res.Body)
 	if err := decoder.Decode(&out); err != nil {
 		return "", "", err
