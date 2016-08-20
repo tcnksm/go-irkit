@@ -1,6 +1,6 @@
 # go-irkit 
 
-[![Travis](https://img.shields.io/travis/tcnksm/go-ikit.svg?style=flat-square)][travis]
+[![Travis](https://img.shields.io/travis/tcnksm/go-irkit.svg?style=flat-square)][travis]
 [![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)][license]
 [![Go Documentation](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)][godocs]
 
